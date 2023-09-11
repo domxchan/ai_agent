@@ -2,15 +2,20 @@ import { StreamingTextResponse, LangChainStream, Message } from 'ai';
 import { AIMessage, HumanMessage } from 'langchain/schema';
 import {
   DynamicTool,
-  DynamicStructuredToolInput,
-  WikipediaQueryRun,
   DynamicStructuredTool,
+  WikipediaQueryRun,
+  ChainTool,
+  SerpAPI,
 } from 'langchain/tools';
+import { Calculator } from 'langchain/tools/calculator';
 import { ChatOpenAI } from 'langchain/chat_models/openai';
 import { initializeAgentExecutorWithOptions } from 'langchain/agents';
+
+import { getVectorStoreChain } from '../../../lib/utils/vectorStoreChain.js';
+
 import * as z from 'zod';
 
-export const runtime = 'edge';
+// export const runtime = 'edge';
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
@@ -34,6 +39,12 @@ export async function POST(req: Request) {
       console.log('triggers foo function');
       return 'the value of foo is "This is a demo"';
     },
+  });
+
+  const serper = new SerpAPI(process.env.SERPAPI_API_KEY, {
+    location: 'Hong Kong',
+    hl: 'en',
+    gl: 'us',
   });
 
   const fetchCryptoPrice = new DynamicStructuredTool({
@@ -61,7 +72,19 @@ export async function POST(req: Request) {
     },
   });
 
-  const tools = [foo, fetchCryptoPrice, wikiQuery];
+  const tools = [foo, fetchCryptoPrice, wikiQuery, serper, new Calculator()];
+
+  const vectorStoreChain = await getVectorStoreChain();
+
+  if (vectorStoreChain) {
+    const docQaTool = new ChainTool({
+      name: 'documentsQuery',
+      description:
+        "documents about the Hong Kong Securities and Futures Commission's Online Distribution and Advisory Platforms Guilelines - useful for questions about selling investments online in Hong Kong, the core principles, requirements, robo-advice, client profiling, suitability requirement and other conduct requirements applicable to the sale of investment products, and guidelines about complex products.",
+      chain: vectorStoreChain,
+    });
+    tools.push(docQaTool);
+  }
 
   const executor = await initializeAgentExecutorWithOptions(tools, model, {
     agentType: 'openai-functions',
@@ -69,6 +92,8 @@ export async function POST(req: Request) {
   });
 
   const input = messages[messages.length - 1].content;
+  console.log('messages: ', messages);
+  console.log(input);
 
   const result = await executor.run(input);
 
