@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StreamingTextResponse, LangChainStream, Message } from 'ai';
 import { ChatOpenAI } from 'langchain/chat_models/openai';
+import { StructuredTool } from 'langchain/tools';
 
 // memory
 import { createRetrieverTool, OpenAIAgentTokenBufferMemory } from 'langchain/agents/toolkits';
@@ -17,7 +18,9 @@ import foo from '../../../lib/utils/fooDynamicTool';
 import serper from '../../../lib/utils/serperTool';
 import wikiQuery from '@/lib/utils/wikipediaQueryRunTool';
 import fetchCryptoPrice from '../../../lib/utils/fetchCryptoDynamicTool';
-import { getVectorStoreChain } from '../../../lib/utils/vectorStoreChain';
+import docRetrieverTool from '@/lib/utils/docRetrieverTool';
+
+// import { getVectorStoreChain } from '../../../lib/utils/vectorStoreRetriever';
 
 // export const runtime = 'edge';
 
@@ -35,17 +38,11 @@ export async function POST(req: Request) {
     streaming: true,
   });
 
-  const tools = [foo, fetchCryptoPrice, wikiQuery, serper, new Calculator()];
+  const tools:StructuredTool[] = [foo, fetchCryptoPrice, wikiQuery, serper, new Calculator()];
 
-  const vectorStoreChain = await getVectorStoreChain();
+  const docQaTool = await docRetrieverTool();
 
-  if (vectorStoreChain) {
-    const docQaTool = new ChainTool({
-      name: 'documentsQuery',
-      description:
-        "documents about the Hong Kong Securities and Futures Commission's Online Distribution and Advisory Platforms Guilelines - useful for questions about selling investments online in Hong Kong, the core principles, requirements, robo-advice, client profiling, suitability requirement and other conduct requirements applicable to the sale of investment products, and guidelines about complex products.",
-      chain: vectorStoreChain,
-    });
+  if (docQaTool) {
     tools.push(docQaTool);
   }
 
