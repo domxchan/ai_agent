@@ -4,6 +4,7 @@ import { JSONLoader } from 'langchain/document_loaders/fs/json';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { CSVLoader } from 'langchain/document_loaders/fs/csv';
 import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
+import { Document } from 'langchain/document';
 
 // Import OpenAI language model and other related modules
 import { OpenAI } from 'langchain/llms/openai';
@@ -18,8 +19,8 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 // Import Tiktoken for token counting
 import { Tiktoken } from '@dqbd/tiktoken/lite';
 import { load } from '@dqbd/tiktoken/load';
-import registry from '@dqbd/tiktoken/registry.json' assert { type: 'json' };
-import models from '@dqbd/tiktoken/model_to_encoding.json' assert { type: 'json' };
+import registry from '@dqbd/tiktoken/registry.json';
+import models from '@dqbd/tiktoken/model_to_encoding.json';
 
 // import dotenv from 'dotenv';
 // dotenv.config();
@@ -27,11 +28,29 @@ import models from '@dqbd/tiktoken/model_to_encoding.json' assert { type: 'json'
 import fs from 'fs';
 import path from 'path';
 
+interface Registry {
+  [key: string]: (
+    | {
+        load_tiktoken_bpe: string;
+      }
+    | {
+        data_gym_to_mergeable_bpe_ranks: {
+          vocab_bpe_file: string;
+          encoder_json_file: string;
+        };
+      }
+  ) & {
+    explicit_n_vocab?: number;
+    pat_str: string;
+    special_tokens: Record<string, number>;
+  };
+}
+
 // Define a function to calculate the cost of tokenizing the documents
-async function calculateCost(docs) {
+async function calculateCost(docs: Document[]) {
   const modelName = 'text-embedding-ada-002';
   const modelKey = models[modelName];
-  const model = await load(registry[modelKey]);
+  const model = await load((registry as Registry)[modelKey]);
   const encoder = new Tiktoken(model.bpe_ranks, model.special_tokens, model.pat_str);
   const tokens = encoder.encode(JSON.stringify(docs));
   const tokenCount = tokens.length;
@@ -42,13 +61,13 @@ async function calculateCost(docs) {
 }
 
 // Define a function to normalize the content of the documents
-function normalizeDocuments(docs) {
+function normalizeDocuments(docs: Document[]) {
   return docs.map((doc) => {
-    if (typeof doc.pageContent === 'string') {
-      return doc.pageContent;
-    } else if (Array.isArray(doc.pageContent)) {
-      return doc.pageContent.join('\n');
-    }
+    // if (typeof doc.pageContent === 'string') {
+    return doc.pageContent;
+    // } else if (Array.isArray(doc.pageContent)) {
+    //   return doc.pageContent.join('\n');
+    // }
   });
 }
 
@@ -102,8 +121,8 @@ export const getVectorStoreRetriever = async () => {
         chunkSize: 1000,
         chunkOverlap: 200,
       });
-      const normalizedDocs = normalizeDocuments(docs);
-      const splitDocs = await textSplitter.createDocuments(normalizedDocs);
+      const normalizedTexts = normalizeDocuments(docs);
+      const splitDocs = await textSplitter.createDocuments(normalizedTexts);
 
       // 16. Generate the vector store from the documents
       vectorStore = await HNSWLib.fromDocuments(splitDocs, new OpenAIEmbeddings());

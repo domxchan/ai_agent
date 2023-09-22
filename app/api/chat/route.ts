@@ -36,9 +36,10 @@ export async function POST(req: Request) {
   const model = new ChatOpenAI({
     temperature: 0,
     streaming: true,
+    modelName: 'gpt-3.5-turbo-instruct', // this replaces the text-davinci-003
   });
 
-  const tools:StructuredTool[] = [foo, fetchCryptoPrice, wikiQuery, serper, new Calculator()];
+  const tools: StructuredTool[] = [foo, fetchCryptoPrice, wikiQuery, serper, new Calculator()];
 
   const docQaTool = await docRetrieverTool();
 
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
     memory,
     returnIntermediateSteps: true,
     verbose: true,
+    maxIterations: 5, // limiting max iterations
   });
 
   const result = await executor.call({ input: currentMessageContent });
